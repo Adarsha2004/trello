@@ -13,7 +13,79 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  username String
+  id       String    @id @default(uuid())
+  email    String    @unique
   password String
+
+  memberships Membership[]
+  issues      IssueMapping[]
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model Org {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  memberships Membership[]
+  boards      Board[]
+}
+
+model Membership {
+  id       String  @id @default(uuid())
+  userId   String
+  orgId    String
+  role     Role    @default(MEMBER)
+  accepted Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+}
+
+model Board {
+  id     String @id @default(uuid())
+  title  String
+  orgId  String
+
+  org      Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sections Section[]
+  issues   Issue[]
+}
+
+model Section {
+  id      String @id @default(uuid())
+  title   String
+  boardId String
+
+  board  Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  issues Issue[]
+}
+
+model Issue {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+  boardId     String
+  sectionId   String
+
+  board   Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  section Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  users   IssueMapping[]
+}
+
+model IssueMapping {
+  id      String @id @default(uuid())
+  userId  String
+  issueId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, issueId])
 }
