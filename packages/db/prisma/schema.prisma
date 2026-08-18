@@ -13,13 +13,15 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(uuid())
-  email    String @unique
-  password String
-  name     String
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
 
   memberships Membership[]
   issues      IssueMapping[]
+  comments    Comment[]
 }
 
 enum Role {
@@ -50,9 +52,10 @@ model Membership {
 }
 
 model Board {
-  id    String @id @default(uuid())
-  title String
-  orgId String
+  id        String   @id @default(uuid())
+  title     String
+  orgId     String
+  createdAt DateTime @default(now())
 
   org      Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
   sections Section[]
@@ -60,24 +63,41 @@ model Board {
 }
 
 model Section {
-  id      String @id @default(uuid())
-  title   String
-  boardId String
+  id        String   @id @default(uuid())
+  title     String
+  boardId   String
+  createdAt DateTime @default(now())
 
   board  Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
   issues Issue[]
 }
 
 model Issue {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
+  position    Int      @default(0)
   boardId     String
   sectionId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  board   Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  section Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  users   IssueMapping[]
+  board    Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  section  Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  users    IssueMapping[]
+  comments Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  issueId   String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model IssueMapping {

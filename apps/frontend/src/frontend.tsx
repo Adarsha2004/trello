@@ -8,12 +8,15 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const elem = document.getElementById("root")!;
+const queryClient = new QueryClient();
 const app = (
-  <StrictMode>
+  <QueryClientProvider client={queryClient}>
     <App />
-  </StrictMode>
+  </QueryClientProvider>
+ 
 );
 
 // https://bun.com/docs/bundler/hot-reloading#import-meta-hot-data
