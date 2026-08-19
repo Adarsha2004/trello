@@ -1,13 +1,16 @@
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import "./index.css";
-
+import SigninPage from "./pages/SigninPage";
+import SignupPage from "./pages/SignupPage";
 
 export function App() {
   return (
     <div>
       <BrowserRouter>
         <Routes>
-        <Route path="/" element={<div></div>} />
+          <Route path="/" element={<Navigate to="/signin" replace />} />
+          <Route path="/signin" element={<SigninPage />} />
+          <Route path="/signup" element={<SignupPage />} />
         </Routes>
       </BrowserRouter>
     </div>
