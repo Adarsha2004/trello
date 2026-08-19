@@ -11,7 +11,7 @@ COPY ./turbo.json ./turbo.json
 COPY ./apps/websocket ./apps/websocket
 
 RUN bun install
-RUN bun run db:generate
+RUN DATABASE_URL=postgresql://user:pass@localhost:5432/db bun run db:generate
 
 EXPOSE 8080
 

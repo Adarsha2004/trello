@@ -2,7 +2,6 @@ FROM oven/bun:1
 
 WORKDIR /app
 
-ARG DATABASE_URL
 COPY ./packages ./packages
 COPY ./bun.lock ./bun.lock
 
@@ -12,8 +11,7 @@ COPY ./turbo.json ./turbo.json
 COPY ./apps/frontend ./apps/frontend
 
 RUN bun install
-RUN bun run db:generate
-RUN DATABASE_URL=${DATABASE_URL} bun run build
+RUN DATABASE_URL=postgresql://user:pass@localhost:5432/db bun run db:generate
 
 EXPOSE 5173
 
