@@ -22,7 +22,7 @@ app.use(sectionRouter);
 app.use(issueRouter);
 app.use(commentRouter);
 
-const port = Number(process.env.PORT);
+const port = Number(process.env.BACKEND_PORT ?? 3000);
 app.listen(port, () => {
   console.log(`Backend listening on http://localhost:${port}`);
 });

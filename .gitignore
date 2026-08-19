@@ -9,6 +9,7 @@ node_modules
 .env
 !packages/prisma/.env
 !packages/db/.env
+!apps/backend/.env
 .env.local
 .env.development.local
 .env.test.local
