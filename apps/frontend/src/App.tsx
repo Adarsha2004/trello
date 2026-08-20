@@ -8,7 +8,7 @@ export function App() {
     <div>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/signin" replace />} />
+          <Route path="/" element={<div>Dashboard</div>} />
           <Route path="/signin" element={<SigninPage />} />
           <Route path="/signup" element={<SignupPage />} />
         </Routes>
