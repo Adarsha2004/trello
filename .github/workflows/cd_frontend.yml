@@ -2,9 +2,16 @@ name: Deploy the frontend
 on:
   push:
     branches: [ main ]
+    paths:
+      - "apps/frontend/**"
+      - "packages/ui/**"
+      - "docker/Dockerfile.frontend"
+      - ".github/workflows/cd_frontend.yml"
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
@@ -22,3 +29,16 @@ jobs:
           file: ./docker/Dockerfile.frontend
           push: true
           tags: adarshanatia/trello_frontend:${{ github.sha }}
+
+      - name: Update manifest with new image tag
+        run: |
+          sed -i "s|image: adarshanatia/trello_frontend:.*|image: adarshanatia/trello_frontend:${{ github.sha }}|" k8s/frontend.yml
+
+      - name: Commit manifest update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/frontend.yml
+          git commit -m "cd: deploy frontend ${{ github.sha }}" || exit 0
+          git pull --rebase
+          git push
