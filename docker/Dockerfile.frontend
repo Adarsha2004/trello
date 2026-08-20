@@ -15,6 +15,4 @@ RUN DATABASE_URL=postgresql://user:pass@localhost:5432/db bun run db:generate
 
 EXPOSE 5173
 
-ENV PUBLIC_API_URL=""
-
 CMD ["bun","run","start:web"]
