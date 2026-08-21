@@ -6,10 +6,12 @@ import boardRouter from "./src/routes/board";
 import sectionRouter from "./src/routes/section";
 import issueRouter from "./src/routes/issue";
 import commentRouter from "./src/routes/comment";
+import cors from "cors";
 
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
