@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: adarshanatia/trello_backend:f7cf3f7eefa8f69aff9c5765be43fcdf6e2de968
+          image: adarshanatia/trello_backend:9522f4353025f6a40a61e71f976e3640bff5dfc8
           ports:
             - containerPort: 3000
           envFrom:
