@@ -39,13 +39,31 @@ function authHeaders() {
 }
 
 export async function getOrganisations(): Promise<Organisation[]> {
-  const res = await axios.get<Organisation[]>(`${API_URL}/api/organizations`, { headers: authHeaders() });
+  const res = await axios.get(`${API_URL}/api/organizations`, { headers: authHeaders() });
   return res.data;
 }
 
-export async function createOrganisation(orgName: string): Promise<Omit<Organisation, "role">> {
-  const res = await axios.post<Omit<Organisation, "role">>(`${API_URL}/api/organization`, {
-    orgName,
-  }, { headers: authHeaders() });
+export async function createOrganisation(orgName: string): Promise<Organisation> {
+  const res = await axios.post(`${API_URL}/api/organization`, { orgName }, { headers: authHeaders() });
+  return res.data;
+}
+
+export interface Board {
+  id: string;
+  title: string;
+  orgId: string;
+  createdAt: string;
+}
+
+export async function getBoards(orgId: string): Promise<Board[]> {
+  const res = await axios.get(`${API_URL}/api/boards`, {
+    params: { orgId },
+    headers: authHeaders(),
+  });
+  return res.data;
+}
+
+export async function createBoard(title: string, orgId: string): Promise<Board> {
+  const res = await axios.post(`${API_URL}/api/board`, { title, orgId }, { headers: authHeaders() });
   return res.data;
 }

@@ -26,7 +26,7 @@ export function Signin() {
       if (data.token) {
         localStorage.setItem("token", data.token);
       }
-      navigate("/");
+      navigate("/organisations");
     },
   });
 
