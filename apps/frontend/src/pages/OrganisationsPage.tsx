@@ -1,16 +1,31 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { getOrganisations } from "@/lib/api";
+import { acceptInvitation, getInvitations, getOrganisations } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { OrganisationCard } from "@/components/organisations/OrganisationCard";
 import { CreateOrganisationDialog } from "@/components/organisations/CreateOrganisationDialog";
 
 export default function OrganisationsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const queryClient = useQueryClient();
+
   const { data: organisations, isPending, isError, error } = useQuery({
     queryKey: ["organisations"],
     queryFn: getOrganisations,
+  });
+
+  const { data: invitations } = useQuery({
+    queryKey: ["invitations"],
+    queryFn: getInvitations,
+  });
+
+  const acceptMutation = useMutation({
+    mutationFn: (orgId: string) => acceptInvitation(orgId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invitations"] });
+      queryClient.invalidateQueries({ queryKey: ["organisations"] });
+    },
   });
 
   return (
@@ -33,6 +48,29 @@ export default function OrganisationsPage() {
               New organisation
             </Button>
           </div>
+
+          {invitations && invitations.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+              <div>
+                <p className="text-sm font-semibold">Pending invitations</p>
+                <p className="text-muted-foreground text-sm">
+                  {invitations.map((org) => org.name).join(", ")}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {invitations.map((org) => (
+                  <Button
+                    key={org.id}
+                    size="sm"
+                    onClick={() => acceptMutation.mutate(org.id)}
+                    disabled={acceptMutation.isPending}
+                  >
+                    Accept {org.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {organisations.length === 0 ? (
             <div className="text-muted-foreground m-auto flex flex-col items-center gap-4">

@@ -23,6 +23,20 @@ router.get("/boards", async (req, res) => {
   res.json(boards);
 });
 
+router.get("/board", async (req, res) => {
+  const { boardId } = req.query;
+  const board = await prisma.board.findUnique({ where: { id: boardId as string } });
+  if (!board) {
+    res.status(404).json({ error: "Board not found" });
+    return;
+  }
+  if (!(await isMember(req.userId!, board.orgId))) {
+    res.status(403).json({ error: "Not a member of this organization" });
+    return;
+  }
+  res.json(board);
+});
+
 router.post("/board", async (req, res) => {
   const { title, orgId } = req.body;
   

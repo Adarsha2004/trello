@@ -3,49 +3,68 @@ import type { WebSocket } from "ws";
 
 const server = new WebSocketServer({ port: 8080 });
 
-const USERS: Record<string, { id: string, ws: WebSocket }[]> = {
-  //board1 : [{id:1,ws:ws1},{id:2,ws:ws2}]
+interface BoardUser {
+  id: string;
+  name: string;
+  ws: WebSocket;
+}
+
+// boardId -> connected users
+const USERS: Record<string, BoardUser[]> = {};
+
+function broadcast(boardId: string, message: unknown, exclude?: WebSocket) {
+  const payload = JSON.stringify(message);
+  USERS[boardId]?.forEach((user) => {
+    if (user.ws !== exclude && user.ws.readyState === user.ws.OPEN) {
+      user.ws.send(payload);
+    }
+  });
 }
 
 server.on("connection", (socket) => {
   socket.on("message", (data) => {
-    const parsedData = JSON.parse(data.toString());
-    if (parsedData.type === "join") {
-      const boardId = parsedData.boardId;
-      const newUserId = parsedData.id
+    let parsed: { type?: string; boardId?: string; id?: string; name?: string };
+    try {
+      parsed = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+
+    if (parsed.type === "join" && parsed.boardId && parsed.id && parsed.name) {
+      const { boardId, id, name } = parsed;
 
       if (!USERS[boardId]) {
         USERS[boardId] = [];
       }
-      
-      USERS[boardId].forEach(({ ws }) =>
-        ws.send(JSON.stringify({
-          type: "join",
-          userId: newUserId
-        }))
-      )
 
-      USERS[boardId].push({ id: newUserId, ws: socket });
+      // Tell everyone else about the new user
+      broadcast(boardId, { type: "join", userId: id, name }, socket);
 
-      socket.send(JSON.stringify({
-        type: "initial_state",
-        users: USERS[boardId].filter(x => x.id !== newUserId).map(u => u.id)
-      }))
+      // Same user in another tab: replace the stale connection
+      USERS[boardId] = USERS[boardId].filter((user) => user.id !== id);
+      USERS[boardId].push({ id, name, ws: socket });
+
+      socket.send(
+        JSON.stringify({
+          type: "initial_state",
+          users: USERS[boardId].filter((user) => user.id !== id).map(({ id, name }) => ({ id, name })),
+        }),
+      );
     }
-  })
+  });
 
   socket.on("close", () => {
-    Object.entries(USERS).map(([boardId, users]) => {
-      const userExists = users.find(u => u.ws === socket);
-      if (userExists) {
-        users = users.filter(x => x.ws !== socket);
-        users.forEach(({ ws }) =>
-          ws.send(JSON.stringify({
-            type: "leave",
-            userId: userExists.id
-          }))
-        )
+    for (const [boardId, users] of Object.entries(USERS)) {
+      const index = users.findIndex((user) => user.ws === socket);
+      if (index === -1) continue;
+
+      const left = users[index]!;
+      users.splice(index, 1);
+      if (users.length === 0) {
+        delete USERS[boardId];
       }
-    })
-  })
-})
+
+      broadcast(boardId, { type: "leave", userId: left.id });
+    }
+  });
+});

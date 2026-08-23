@@ -23,7 +23,10 @@ router.get("/sections", async (req, res) => {
     return;
   }
 
-  const allSections = await prisma.section.findMany({ where: { boardId: boardId as string } });
+  const allSections = await prisma.section.findMany({
+    where: { boardId: boardId as string },
+    orderBy: { createdAt: "asc" },
+  });
 
   res.json(allSections);
 });

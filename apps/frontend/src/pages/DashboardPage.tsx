@@ -23,14 +23,14 @@ export default function DashboardPage() {
     setSearchParams({ orgId });
   };
 
-  const { data: organisations, isPending: orgsPending, isError: orgsError, error: orgsErrorObj } = useQuery({
+  const AllOrganisations = useQuery({
     queryKey: ["organisations"],
     queryFn: getOrganisations,
   });
 
   const selectedOrgId = searchParams.get("orgId");
   const selectedOrg =
-    organisations?.find((org) => org.id === selectedOrgId) ?? organisations?.[0] ?? null;
+    AllOrganisations.data?.find((org) => org.id === selectedOrgId) ?? AllOrganisations.data?.[0] ?? null;
 
   const { data: boards, isPending: boardsPending } = useQuery({
     queryKey: ["boards", selectedOrg?.id],
@@ -46,13 +46,13 @@ export default function DashboardPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="gap-2">
-                  {orgsPending ? "Loading..." : selectedOrg ? selectedOrg.name : "No organisation"}
+                  {AllOrganisations.isPending ? "Loading..." : selectedOrg ? selectedOrg.name : "No organisation"}
                   <ChevronsUpDown className="size-4 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 <DropdownMenuLabel>Organisations</DropdownMenuLabel>
-                {organisations?.map((org) => (
+                {AllOrganisations.data?.map((org) => (
                   <DropdownMenuItem key={org.id} onClick={() => selectOrg(org.id)}>
                     <Check className={org.id === selectedOrg?.id ? "opacity-100" : "opacity-0"} />
                     {org.name}
@@ -73,11 +73,13 @@ export default function DashboardPage() {
 
       <main className="flex flex-1 flex-col px-4 py-10">
         <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
-          {orgsPending ? (
+          {AllOrganisations.isPending ? (
             <p className="text-muted-foreground m-auto text-sm">Loading organisations...</p>
-          ) : orgsError ? (
+          ) : AllOrganisations.isError ? (
             <p className="text-destructive m-auto text-sm">
-              {orgsErrorObj instanceof Error ? orgsErrorObj.message : "Failed to load organisations"}
+              {AllOrganisations.error
+                ? AllOrganisations.error.message
+                : "Failed to load organisations"}
             </p>
           ) : !selectedOrg ? (
             <div className="text-muted-foreground m-auto flex flex-col items-center gap-4">

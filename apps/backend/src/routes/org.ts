@@ -51,6 +51,15 @@ router.delete("/organization", async (req, res) => {
   
 });
 
+router.get("/invitations", async (req, res) => {
+  const memberships = await prisma.membership.findMany({
+    where: { userId: req.userId, accepted: false },
+    include: { org: { select: { id: true, name: true, description: true } } },
+  });
+
+  res.json(memberships.map((m) => ({ ...m.org, role: m.role })));
+});
+
 router.post("/invite", async (req, res) => {
   const { email, orgId } = req.body;
 
