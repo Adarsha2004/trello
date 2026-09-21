@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: websocket
-          image: adarshanatia/trello_websocket:c5a320d215b2a75ffd58f51de18708e42fd8860e
+          image: adarshanatia/trello_websocket:0ff0b35a328643de301df1cf3905b26e31d48261
           ports:
             - containerPort: 8080
           resources:
