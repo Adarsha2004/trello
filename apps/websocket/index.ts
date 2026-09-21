@@ -40,16 +40,12 @@ server.on("connection", (socket) => {
       // Tell everyone else about the new user
       broadcast(boardId, { type: "join", userId: id, name }, socket);
 
-      // Same user in another tab: replace the stale connection
-      USERS[boardId] = USERS[boardId].filter((user) => user.id !== id);
       USERS[boardId].push({ id, name, ws: socket });
 
-      socket.send(
-        JSON.stringify({
-          type: "initial_state",
-          users: USERS[boardId].filter((user) => user.id !== id).map(({ id, name }) => ({ id, name })),
-        }),
+      const others = new Map(
+        USERS[boardId].filter((user) => user.id !== id).map((user) => [user.id, { id: user.id, name: user.name }]),
       );
+      socket.send(JSON.stringify({ type: "initial_state", users: [...others.values()] }));
     }
   });
 
@@ -60,11 +56,15 @@ server.on("connection", (socket) => {
 
       const left = users[index]!;
       users.splice(index, 1);
-      if (users.length === 0) {
+
+      // Only broadcast leave when the user's last socket for this board closed
+      const stillConnected = users.some((user) => user.id === left.id);
+      if (!stillConnected && users.length === 0) {
         delete USERS[boardId];
       }
-
-      broadcast(boardId, { type: "leave", userId: left.id });
+      if (!stillConnected) {
+        broadcast(boardId, { type: "leave", userId: left.id });
+      }
     }
   });
 });

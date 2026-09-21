@@ -66,14 +66,14 @@ export function CreateOrganisationDialog({ open, onClose }: CreateOrganisationDi
               id="orgName"
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
-              placeholder="Acme Inc"
+              placeholder="Google Inc"
               autoFocus
               required
             />
           </div>
           {mutation.isError && (
             <p className="text-destructive text-sm">
-              {mutation.error instanceof Error ? mutation.error.message : "Failed to create organisation"}
+              {mutation.error ? mutation.error.message : "Failed to create organisation"}
             </p>
           )}
           <div className="flex justify-end gap-2">

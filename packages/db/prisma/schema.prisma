@@ -76,7 +76,7 @@ model Issue {
   id          String   @id @default(uuid())
   title       String
   description String?
-  position    Int      @default(0)
+  position    String
   boardId     String
   sectionId   String
   createdAt   DateTime @default(now())
@@ -86,6 +86,8 @@ model Issue {
   section  Section        @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   users    IssueMapping[]
   comments Comment[]
+
+  @@unique([sectionId, position])
 }
 
 model Comment {
