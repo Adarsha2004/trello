@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "apps/backend/**"
+      - "packages/auth/**"
       - "packages/db/**"
       - "docker/Dockerfile.backend"
       - ".github/workflows/cd_backend.yml"

@@ -6,35 +6,15 @@ export interface AuthUser {
   name: string;
 }
 
-export interface AuthResponse {
-  token?: string;
-  user: AuthUser;
-}
-
 // Local dev: talk straight to the backend. Everywhere else (cluster): same-origin, ingress routes /api.
 const API_URL =
   window.location.hostname === "localhost" ? "http://localhost:3000" : "";
 
-export async function signin(
-  email: string,
-  password: string,
-): Promise<AuthResponse> {
-  const res = await axios.post(`${API_URL}/api/signin`, { email, password });
-  return res.data;
-}
-
-export async function signup(
-  name: string,
-  email: string,
-  password: string,
-): Promise<AuthResponse> {
-  const res = await axios.post(`${API_URL}/api/signup`, {
-    name,
-    email,
-    password,
-  });
-  return res.data;
-}
+// Auth uses cookies (Better Auth): send/accept them on every request.
+export const api = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+});
 
 export type OrganisationRole = "ADMIN" | "MEMBER";
 
@@ -45,26 +25,15 @@ export interface Organisation {
   role: OrganisationRole;
 }
 
-function authHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 export async function getOrganisations(): Promise<Organisation[]> {
-  const res = await axios.get(`${API_URL}/api/organizations`, {
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/organizations");
   return res.data;
 }
 
 export async function createOrganisation(
   orgName: string,
 ): Promise<Organisation> {
-  const res = await axios.post(
-    `${API_URL}/api/organization`,
-    { orgName },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/organization", { orgName });
   return res.data;
 }
 
@@ -72,29 +41,19 @@ export async function inviteMember(
   email: string,
   orgId: string,
 ): Promise<{ message: string }> {
-  const res = await axios.post(
-    `${API_URL}/api/invite`,
-    { email, orgId },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/invite", { email, orgId });
   return res.data;
 }
 
 export async function getInvitations(): Promise<Organisation[]> {
-  const res = await axios.get(`${API_URL}/api/invitations`, {
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/invitations");
   return res.data;
 }
 
 export async function acceptInvitation(
   orgId: string,
 ): Promise<{ message: string }> {
-  const res = await axios.post(
-    `${API_URL}/api/accept`,
-    { orgId },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/accept", { orgId });
   return res.data;
 }
 
@@ -114,10 +73,7 @@ export interface Board {
 }
 
 export async function getBoards(orgId: string): Promise<Board[]> {
-  const res = await axios.get(`${API_URL}/api/boards`, {
-    params: { orgId },
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/boards", { params: { orgId } });
   return res.data;
 }
 
@@ -125,24 +81,17 @@ export async function createBoard(
   title: string,
   orgId: string,
 ): Promise<Board> {
-  const res = await axios.post(
-    `${API_URL}/api/board`,
-    { title, orgId },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/board", { title, orgId });
   return res.data;
 }
 
 export async function getBoard(boardId: string): Promise<Board> {
-  const res = await axios.get(`${API_URL}/api/board`, {
-    params: { boardId },
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/board", { params: { boardId } });
   return res.data;
 }
 
 export async function getCurrentUser(): Promise<AuthUser> {
-  const res = await axios.get(`${API_URL}/api/me`, { headers: authHeaders() });
+  const res = await api.get("/api/me");
   return res.data;
 }
 
@@ -154,10 +103,7 @@ export interface Section {
 }
 
 export async function getSections(boardId: string): Promise<Section[]> {
-  const res = await axios.get(`${API_URL}/api/sections`, {
-    params: { boardId },
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/sections", { params: { boardId } });
   return res.data;
 }
 
@@ -165,11 +111,7 @@ export async function createSection(
   title: string,
   boardId: string,
 ): Promise<Section> {
-  const res = await axios.post(
-    `${API_URL}/api/section`,
-    { title, boardId },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/section", { title, boardId });
   return res.data;
 }
 
@@ -189,10 +131,7 @@ export interface Issue {
 export async function getIssues(
   boardId: string,
 ): Promise<Record<string, Issue[]>> {
-  const res = await axios.get(`${API_URL}/api/issues`, {
-    params: { boardId },
-    headers: authHeaders(),
-  });
+  const res = await api.get("/api/issues", { params: { boardId } });
   return res.data;
 }
 
@@ -201,11 +140,7 @@ export async function createIssue(
   sectionId: string,
   boardId: string,
 ): Promise<Issue> {
-  const res = await axios.post(
-    `${API_URL}/api/issue`,
-    { title, sectionId, boardId },
-    { headers: authHeaders() },
-  );
+  const res = await api.post("/api/issue", { title, sectionId, boardId });
   return res.data;
 }
 
@@ -214,10 +149,10 @@ export async function moveIssue(
   targetSectionId: string,
   newKey: string,
 ): Promise<Issue> {
-  const res = await axios.put(
-    `${API_URL}/api/issue/move`,
-    { issueId, targetSectionId, newKey },
-    { headers: authHeaders() },
-  );
+  const res = await api.put("/api/issue/move", {
+    issueId,
+    targetSectionId,
+    newKey,
+  });
   return res.data;
 }

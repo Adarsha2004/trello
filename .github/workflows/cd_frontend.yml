@@ -5,6 +5,7 @@ on:
     paths:
       - "apps/frontend/**"
       - "packages/ui/**"
+      - "packages/auth/**"
       - "docker/Dockerfile.frontend"
       - ".github/workflows/cd_frontend.yml"
 jobs:

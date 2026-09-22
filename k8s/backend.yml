@@ -23,6 +23,12 @@ spec:
           env:
             - name: BACKEND_PORT
               value: "3000"
+            - name: PROD
+              value: "true"
+            - name: FRONTEND_URL
+              value: "https://trello.adarshanatia.xyz"
+            - name: BACKEND_URL
+              value: "https://trello.adarshanatia.xyz"
           resources:
             requests:
               cpu: 100m

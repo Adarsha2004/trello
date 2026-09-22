@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation } from "@tanstack/react-query";
-import { signin } from "@/lib/api";
+import { authClient } from "@repo/auth/client";
 import trelloSignin from "@/trello_signin.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,19 +19,40 @@ export function Signin() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
-  const mutation = useMutation({
-    mutationFn: () => signin(email, password),
-    onSuccess: (data) => {
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
-      navigate("/organisations");
+  const signinMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.signIn.email({
+        email,
+        password,
+      });
+      if (error) throw new Error(error.message ?? "Failed to sign in");
     },
+    onSuccess: () => navigate("/organisations"),
   });
 
-  const error = mutation.isError ? mutation.error.message : null;
+  const magicLinkMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.signIn.magicLink({
+        email,
+        // Absolute URL: verify runs on the backend origin, so a relative
+        // path would redirect there instead of back to the SPA.
+        callbackURL: `${window.location.origin}/organisations`,
+      });
+      if (error) throw new Error(error.message ?? "Failed to send magic link");
+    },
+    onSuccess: () => setMagicLinkSent(true),
+  });
+
+  const error = signinMutation.isError
+    ? signinMutation.error.message
+    : magicLinkMutation.isError
+      ? magicLinkMutation.error.message
+      : null;
   const canSubmit = email !== "" && password !== "";
+  const pending =
+    signinMutation.isPending || magicLinkMutation.isPending;
 
   return (
     <Card className="w-full max-w-4xl overflow-hidden p-0 md:flex-row">
@@ -69,14 +90,27 @@ export function Signin() {
             />
           </div>
           {error && <p className="text-destructive text-sm">{error}</p>}
+          {magicLinkSent && (
+            <p className="text-sm text-muted-foreground">
+              Magic link sent — check your email (or the backend console in dev).
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
           <Button
             className="w-full"
-            disabled={!canSubmit || mutation.isPending}
-            onClick={() => mutation.mutate()}
+            disabled={!canSubmit || pending}
+            onClick={() => signinMutation.mutate()}
           >
-            {mutation.isPending ? "Signing in..." : "Sign in"}
+            {signinMutation.isPending ? "Signing in..." : "Sign in"}
+          </Button>
+          <Button
+            className="w-full"
+            variant="outline"
+            disabled={email === "" || pending}
+            onClick={() => magicLinkMutation.mutate()}
+          >
+            {magicLinkMutation.isPending ? "Sending..." : "Email me a magic link"}
           </Button>
         </CardFooter>
       </div>

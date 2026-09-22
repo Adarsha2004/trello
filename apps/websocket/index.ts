@@ -1,7 +1,10 @@
+import "dotenv/config";
 import { WebSocketServer } from "ws";
+import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
+import { auth } from "@repo/auth/server";
 
-const server = new WebSocketServer({ port: 8080 });
+const server = new WebSocketServer({ port: Number(process.env.WS_PORT ?? 8080) });
 
 interface BoardUser {
   id: string;
@@ -21,17 +24,42 @@ function broadcast(boardId: string, message: unknown, exclude?: WebSocket) {
   });
 }
 
-server.on("connection", (socket) => {
-  socket.on("message", (data) => {
-    let parsed: { type?: string; boardId?: string; id?: string; name?: string };
+// Validate the Better Auth session cookie from the handshake headers.
+async function getSessionUser(req: IncomingMessage) {
+  try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    return session ? { id: session.user.id, name: session.user.name } : null;
+  } catch {
+    return null;
+  }
+}
+
+server.on("connection", (socket, req) => {
+  // Resolve the session asynchronously; gate message handling on it so a
+  // client that sends "join" immediately isn't dropped while we query the DB.
+  let user: { id: string; name: string } | null = null;
+  const ready = getSessionUser(req).then((sessionUser) => {
+    user = sessionUser;
+    if (!sessionUser) {
+      socket.close(4401, "Unauthorized");
+    }
+    return sessionUser;
+  });
+
+  socket.on("message", async (data) => {
+    await ready;
+    if (!user) return;
+
+    let parsed: { type?: string; boardId?: string };
     try {
       parsed = JSON.parse(data.toString());
     } catch {
       return;
     }
 
-    if (parsed.type === "join" && parsed.boardId && parsed.id && parsed.name) {
-      const { boardId, id, name } = parsed;
+    if (parsed.type === "join" && parsed.boardId) {
+      const { boardId } = parsed;
+      const { id, name } = user;
 
       if (!USERS[boardId]) {
         USERS[boardId] = [];
@@ -40,10 +68,10 @@ server.on("connection", (socket) => {
       // Tell everyone else about the new user
       broadcast(boardId, { type: "join", userId: id, name }, socket);
 
-      USERS[boardId].push({ id, name, ws: socket });
+      USERS[boardId]!.push({ id, name, ws: socket });
 
       const others = new Map(
-        USERS[boardId].filter((user) => user.id !== id).map((user) => [user.id, { id: user.id, name: user.name }]),
+        USERS[boardId]!.filter((u) => u.id !== id).map((u) => [u.id, { id: u.id, name: u.name }]),
       );
       socket.send(JSON.stringify({ type: "initial_state", users: [...others.values()] }));
     }
@@ -51,14 +79,14 @@ server.on("connection", (socket) => {
 
   socket.on("close", () => {
     for (const [boardId, users] of Object.entries(USERS)) {
-      const index = users.findIndex((user) => user.ws === socket);
+      const index = users.findIndex((u) => u.ws === socket);
       if (index === -1) continue;
 
       const left = users[index]!;
       users.splice(index, 1);
 
       // Only broadcast leave when the user's last socket for this board closed
-      const stillConnected = users.some((user) => user.id === left.id);
+      const stillConnected = users.some((u) => u.id === left.id);
       if (!stillConnected && users.length === 0) {
         delete USERS[boardId];
       }

@@ -4,6 +4,7 @@ on:
     branches: [ main ]
     paths:
       - "apps/websocket/**"
+      - "packages/auth/**"
       - "docker/Dockerfile.ws"
       - ".github/workflows/cd_ws.yml"
 jobs: 

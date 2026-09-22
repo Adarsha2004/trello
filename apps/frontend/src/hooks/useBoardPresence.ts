@@ -35,9 +35,8 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
       socket.onopen = () => {
         retry = 0;
         setConnected(true);
-        socket?.send(
-          JSON.stringify({ type: "join", boardId, id: meRef.current?.id, name: meRef.current?.name }),
-        );
+        // Identity comes from the session cookie validated on the handshake.
+        socket?.send(JSON.stringify({ type: "join", boardId }));
       };
 
       socket.onmessage = (event) => {
@@ -61,9 +60,10 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
         }
       };
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         setConnected(false);
-        if (!closed) {
+        // 4401 = session invalid/expired: retrying won't help.
+        if (!closed && event.code !== 4401) {
           retryTimer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000));
         }
       };

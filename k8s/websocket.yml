@@ -17,6 +17,14 @@ spec:
           image: adarshanatia/trello_websocket:0ff0b35a328643de301df1cf3905b26e31d48261
           ports:
             - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: trello-secrets
+          env:
+            - name: WS_PORT
+              value: "8080"
+            - name: PROD
+              value: "true"
           resources:
             requests:
               cpu: 100m

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation } from "@tanstack/react-query";
-import { signup } from "@/lib/api";
+import { authClient } from "@repo/auth/client";
 import trelloSignin from "@/trello_signin.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +22,16 @@ export function Signup() {
   const [password, setPassword] = useState("");
 
   const mutation = useMutation({
-    mutationFn: () => signup(name, email, password),
-    onSuccess: () => navigate("/signin"),
+    mutationFn: async () => {
+      const { error } = await authClient.signUp.email({
+        name,
+        email,
+        password,
+      });
+      if (error) throw new Error(error.message ?? "Failed to sign up");
+    },
+    // Better Auth signs the user in on signup (session cookie is set).
+    onSuccess: () => navigate("/organisations"),
   });
 
   const error = mutation.isError ? mutation.error.message : null;
