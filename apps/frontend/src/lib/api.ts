@@ -18,6 +18,18 @@ export const api = axios.create({
 
 export type OrganisationRole = "ADMIN" | "MEMBER";
 
+export interface OrgMember {
+  id: string;
+  name: string;
+  email: string;
+  role: OrganisationRole;
+}
+
+export async function getOrgMembers(orgId: string): Promise<OrgMember[]> {
+  const res = await api.get("/api/members", { params: { orgId } });
+  return res.data;
+}
+
 export interface Organisation {
   id: string;
   name: string;
@@ -115,6 +127,11 @@ export async function createSection(
   return res.data;
 }
 
+export interface IssueAssignee {
+  id: string;
+  name: string;
+}
+
 export interface Issue {
   id: string;
   title: string;
@@ -126,6 +143,7 @@ export interface Issue {
   sectionId: string;
   createdAt: string;
   updatedAt: string;
+  users?: { user: IssueAssignee }[];
 }
 
 export async function getIssues(
@@ -139,8 +157,16 @@ export async function createIssue(
   title: string,
   sectionId: string,
   boardId: string,
+  description?: string,
+  assigneeIds?: string[],
 ): Promise<Issue> {
-  const res = await api.post("/api/issue", { title, sectionId, boardId });
+  const res = await api.post("/api/issue", {
+    title,
+    description,
+    assigneeIds,
+    sectionId,
+    boardId,
+  });
   return res.data;
 }
 
@@ -154,5 +180,21 @@ export async function moveIssue(
     targetSectionId,
     newKey,
   });
+  return res.data;
+}
+
+export async function deleteIssue(issueId: string): Promise<void> {
+  await api.delete("/api/issue", { data: { issueId } });
+}
+
+export async function updateIssue(
+  issueId: string,
+  data: {
+    title?: string;
+    description?: string;
+    assigneeIds?: string[];
+  },
+): Promise<Issue> {
+  const res = await api.put("/api/issue", { issueId, ...data });
   return res.data;
 }

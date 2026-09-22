@@ -1,10 +1,11 @@
-import { startTransition, useMemo, useOptimistic } from "react";
+import { createContext, useContext, startTransition, useCallback, useMemo, useOptimistic } from "react";
 import { Link, useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, WifiOff } from "lucide-react";
 import {
   getBoard,
   getIssues,
+  getOrgMembers,
   getSections,
   moveIssue,
   type Issue,
@@ -16,6 +17,16 @@ import { PresenceAvatars } from "@/components/board/PresenceAvatars";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useBoardPresence } from "@/hooks/useBoardPresence";
 import type { MoveIssueAction } from "@/lib/dnd";
+
+export interface BoardContextValue {
+  broadcastBoardUpdate: (scope?: "issues" | "sections" | "all") => void;
+}
+
+export const BoardContext = createContext<BoardContextValue>({
+  broadcastBoardUpdate: () => {},
+});
+
+export const useBoard = () => useContext(BoardContext);
 
 // Fractional indexing: a move only rewrites the moved issue's section and
 // order key (a string that sorts between the card's new neighbors) — no
@@ -51,11 +62,73 @@ export default function BoardPage() {
     enabled: !!boardId,
   });
 
+  // Org members for assignee selection; orgId comes from the board.
+  const membersQuery = useQuery({
+    queryKey: ["members", boardQuery.data?.orgId],
+    queryFn: () => getOrgMembers(boardQuery.data!.orgId),
+    enabled: !!boardQuery.data?.orgId,
+  });
+
   const meQuery = useCurrentUser();
   const me = meQuery.data ?? null;
-  const { users, connected } = useBoardPresence(boardId, me);
-
   const queryClient = useQueryClient();
+
+  // When a remote user moves an issue, patch the React Query cache so
+  // the card jumps to its new position instantly — no refetch needed.
+  const handleRemoteMove = useCallback(
+    (action: MoveIssueAction) => {
+      queryClient.setQueryData<Record<string, Issue[]>>(
+        ["issues", boardId],
+        (old) => {
+          if (!old) return old;
+          // Find the issue in any section, update its sectionId + position,
+          // then re-group into the section-keyed record.
+          const flat = Object.values(old).flat();
+          const updated = flat.map((issue) =>
+            issue.id === action.issueId
+              ? { ...issue, sectionId: action.targetSectionId, position: action.newKey }
+              : issue,
+          );
+          const grouped: Record<string, Issue[]> = {};
+          for (const issue of updated) {
+            (grouped[issue.sectionId] ??= []).push(issue);
+          }
+          return grouped;
+        },
+      );
+    },
+    [queryClient, boardId],
+  );
+
+  const handleBoardUpdate = useCallback(
+    (scope: "issues" | "sections" | "all") => {
+      if (scope === "issues" || scope === "all") {
+        queryClient.invalidateQueries({ queryKey: ["issues", boardId] });
+      }
+      if (scope === "sections" || scope === "all") {
+        queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
+      }
+    },
+    [queryClient, boardId],
+  );
+
+  const { users, connected, sendMessage } = useBoardPresence(boardId, me, {
+    onMoveIssue: handleRemoteMove,
+    onBoardUpdate: handleBoardUpdate,
+  });
+
+  const broadcastBoardUpdate = useCallback(
+    (scope: "issues" | "sections" | "all" = "issues") => {
+      if (!boardId) return;
+      sendMessage({
+        type: "board_updated",
+        boardId,
+        scope,
+      });
+    },
+    [sendMessage, boardId],
+  );
+
   const moveMutation = useMutation({
     mutationFn: (vars: MoveIssueAction) =>
       moveIssue(vars.issueId, vars.targetSectionId, vars.newKey),
@@ -76,6 +149,16 @@ export default function BoardPage() {
   );
 
   const handleMoveIssue = (action: MoveIssueAction) => {
+    // Broadcast immediately so remote users see the move at the same
+    // time as our local optimistic update — no waiting for the DB.
+    sendMessage({
+      type: "move_issue",
+      boardId,
+      issueId: action.issueId,
+      targetSectionId: action.targetSectionId,
+      newKey: action.newKey,
+    });
+
     startTransition(async () => {
       addOptimisticMove(action);
 
@@ -103,7 +186,12 @@ export default function BoardPage() {
     });
   };
 
-  if (boardQuery.isPending) {
+  // Load board, sections and issues before rendering anything — avoids the
+  // staged "loading → empty board → cards pop in" flash.
+  const boardPending =
+    boardQuery.isPending || sectionsQuery.isPending || issuesQuery.isPending;
+
+  if (boardPending) {
     return (
       <p className="text-muted-foreground m-auto text-sm">Loading board...</p>
     );
@@ -145,59 +233,62 @@ export default function BoardPage() {
       );
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="bg-background sticky top-0 z-10 border-b">
-        <div className="flex h-14 items-center justify-between gap-4 px-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link to={`/dashboard?orgId=${board.orgId}`}>
-                <ArrowLeft />
-              </Link>
-            </Button>
-            <h1 className="truncate text-lg font-semibold">{board.title}</h1>
+    <BoardContext.Provider value={{ broadcastBoardUpdate }}>
+      <div className="flex h-screen flex-col">
+        <header className="bg-background sticky top-0 z-10 border-b">
+          <div className="flex h-14 items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button variant="ghost" size="icon" asChild>
+                <Link to={`/dashboard?orgId=${board.orgId}`}>
+                  <ArrowLeft />
+                </Link>
+              </Button>
+              <h1 className="truncate text-lg font-semibold">{board.title}</h1>
+            </div>
+            <div className="flex items-center gap-3">
+              {!connected && (
+                <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                  <WifiOff className="size-3.5" />
+                  Reconnecting...
+                </span>
+              )}
+              <PresenceAvatars users={presentUsers} />
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {!connected && (
-              <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                <WifiOff className="size-3.5" />
-                Reconnecting...
-              </span>
-            )}
-            <PresenceAvatars users={presentUsers} />
-          </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="flex flex-1 gap-4 overflow-x-auto p-4">
-        {sectionsQuery.isPending ? (
-          <p className="text-muted-foreground m-auto text-sm">
-            Loading sections...
-          </p>
-        ) : sectionsQuery.isError ? (
-          <p className="text-destructive m-auto text-sm">
-            {sectionsQuery.error instanceof Error
-              ? sectionsQuery.error.message
-              : "Failed to load sections"}
-          </p>
-        ) : sections.length === 0 ? (
-          <div className="flex w-full items-start">
-            <AddSectionColumn boardId={board.id} />
-          </div>
-        ) : (
-          <>
-            {sections.map((section) => (
-              <SectionColumn
-                key={section.id}
-                section={section}
-                issues={issuesInSection(section.id)}
-                boardId={board.id}
-                onMoveIssue={handleMoveIssue}
-              />
-            ))}
-            <AddSectionColumn boardId={board.id} />
-          </>
-        )}
-      </main>
-    </div>
+        <main className="flex flex-1 gap-4 overflow-x-auto p-4">
+          {sectionsQuery.isPending ? (
+            <p className="text-muted-foreground m-auto text-sm">
+              Loading sections...
+            </p>
+          ) : sectionsQuery.isError ? (
+            <p className="text-destructive m-auto text-sm">
+              {sectionsQuery.error instanceof Error
+                ? sectionsQuery.error.message
+                : "Failed to load sections"}
+            </p>
+          ) : sections.length === 0 ? (
+            <div className="flex w-full items-start">
+              <AddSectionColumn boardId={board.id} />
+            </div>
+          ) : (
+            <>
+              {sections.map((section) => (
+                <SectionColumn
+                  key={section.id}
+                  section={section}
+                  issues={issuesInSection(section.id)}
+                  boardId={board.id}
+                  members={membersQuery.data ?? []}
+                  onMoveIssue={handleMoveIssue}
+                />
+              ))}
+              <AddSectionColumn boardId={board.id} />
+            </>
+          )}
+        </main>
+      </div>
+    </BoardContext.Provider>
   );
 }

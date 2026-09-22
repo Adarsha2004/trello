@@ -50,7 +50,14 @@ server.on("connection", (socket, req) => {
     await ready;
     if (!user) return;
 
-    let parsed: { type?: string; boardId?: string };
+    let parsed: {
+      type?: string;
+      boardId?: string;
+      issueId?: string;
+      targetSectionId?: string;
+      newKey?: string;
+      scope?: string;
+    };
     try {
       parsed = JSON.parse(data.toString());
     } catch {
@@ -74,6 +81,40 @@ server.on("connection", (socket, req) => {
         USERS[boardId]!.filter((u) => u.id !== id).map((u) => [u.id, { id: u.id, name: u.name }]),
       );
       socket.send(JSON.stringify({ type: "initial_state", users: [...others.values()] }));
+    }
+
+    // When a user drops an issue (completed move), relay to everyone else
+    // on the same board so their boards update in real-time.
+    if (
+      parsed.type === "move_issue" &&
+      parsed.boardId &&
+      parsed.issueId &&
+      parsed.targetSectionId &&
+      parsed.newKey
+    ) {
+      broadcast(
+        parsed.boardId,
+        {
+          type: "move_issue",
+          issueId: parsed.issueId,
+          targetSectionId: parsed.targetSectionId,
+          newKey: parsed.newKey,
+        },
+        socket,
+      );
+    }
+
+    // When an issue or section is created, updated, or deleted, notify
+    // other users on the same board so they can refetch and stay in sync.
+    if (parsed.type === "board_updated" && parsed.boardId) {
+      broadcast(
+        parsed.boardId,
+        {
+          type: "board_updated",
+          scope: parsed.scope ?? "issues",
+        },
+        socket,
+      );
     }
   });
 

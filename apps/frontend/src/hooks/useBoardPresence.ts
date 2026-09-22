@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MoveIssueAction } from "@/lib/dnd";
 
 export interface PresenceUser {
   id: string;
@@ -9,15 +10,36 @@ export interface PresenceUser {
 const WS_URL =
   window.location.hostname === "localhost" ? "ws://localhost:8080" : `wss://${window.location.host}/ws`;
 
+interface UseBoardPresenceOptions {
+  /** Called when another user drops an issue on their board. */
+  onMoveIssue?: (action: MoveIssueAction) => void;
+  /** Called when another user updates, creates, or deletes an issue/section. */
+  onBoardUpdate?: (scope: "issues" | "sections" | "all") => void;
+}
+
 /**
  * Joins the board room over WebSocket and tracks who is currently present.
  * The local user is included in the returned list.
+ *
+ * Also relays real-time board mutations (issue moves, card edits, etc.) between peers.
  */
-export function useBoardPresence(boardId: string | undefined, me: PresenceUser | null) {
+export function useBoardPresence(
+  boardId: string | undefined,
+  me: PresenceUser | null,
+  options?: UseBoardPresenceOptions,
+) {
   const [users, setUsers] = useState<PresenceUser[]>([]);
   const [connected, setConnected] = useState(false);
   const meRef = useRef(me);
   meRef.current = me;
+
+  // Keep callback refs up-to-date without re-triggering the effect.
+  const onMoveIssueRef = useRef(options?.onMoveIssue);
+  onMoveIssueRef.current = options?.onMoveIssue;
+  const onBoardUpdateRef = useRef(options?.onBoardUpdate);
+  onBoardUpdateRef.current = options?.onBoardUpdate;
+
+  const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     if (!boardId || !me) return;
@@ -31,6 +53,7 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
 
     const connect = () => {
       socket = new WebSocket(WS_URL);
+      socketRef.current = socket;
 
       socket.onopen = () => {
         retry = 0;
@@ -40,7 +63,16 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
       };
 
       socket.onmessage = (event) => {
-        let message: { type?: string; userId?: string; name?: string; users?: PresenceUser[] };
+        let message: {
+          type?: string;
+          userId?: string;
+          name?: string;
+          users?: PresenceUser[];
+          issueId?: string;
+          targetSectionId?: string;
+          newKey?: string;
+          scope?: "issues" | "sections" | "all";
+        };
         try {
           message = JSON.parse(event.data as string);
         } catch {
@@ -57,10 +89,24 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
         } else if (message.type === "leave" && message.userId) {
           const { userId } = message;
           setUsers((prev) => prev.filter((user) => user.id !== userId));
+        } else if (
+          message.type === "move_issue" &&
+          message.issueId &&
+          message.targetSectionId &&
+          message.newKey
+        ) {
+          onMoveIssueRef.current?.({
+            issueId: message.issueId,
+            targetSectionId: message.targetSectionId,
+            newKey: message.newKey,
+          });
+        } else if (message.type === "board_updated") {
+          onBoardUpdateRef.current?.(message.scope ?? "issues");
         }
       };
 
       socket.onclose = (event) => {
+        socketRef.current = null;
         setConnected(false);
         // 4401 = session invalid/expired: retrying won't help.
         if (!closed && event.code !== 4401) {
@@ -74,10 +120,19 @@ export function useBoardPresence(boardId: string | undefined, me: PresenceUser |
     return () => {
       closed = true;
       clearTimeout(retryTimer);
+      socketRef.current = null;
       socket?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId, me?.id]);
 
-  return { users, connected };
+  /** Send a JSON message through the board WebSocket (fire-and-forget). */
+  const sendMessage = useCallback((message: Record<string, unknown>) => {
+    const ws = socketRef.current;
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return { users, connected, sendMessage };
 }

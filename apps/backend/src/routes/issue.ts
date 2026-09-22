@@ -39,6 +39,11 @@ router.get("/issues", async (req, res) => {
   const issues = await prisma.issue.findMany({
     where: { boardId: boardId as string },
     orderBy: { position: "asc" },
+    include: {
+      users: {
+        select: { user: { select: { id: true, name: true } } },
+      },
+    },
   });
   const groupedbySection = Object.groupBy(issues, (issues) => issues.sectionId);
 
@@ -76,7 +81,7 @@ router.get("/issue/:issueId", async (req, res) => {
 });
 
 router.post("/issue", async (req, res) => {
-  const { title, description, sectionId, boardId } = req.body;
+  const { title, description, sectionId, boardId, assigneeIds } = req.body;
   if (!(await canAccessBoard(req.userId, boardId))) {
     res.status(403).json({ error: "Not a member of this organization" });
     return;
@@ -86,6 +91,22 @@ router.post("/issue", async (req, res) => {
     res.status(404).json({ error: "Section not found" });
     return;
   }
+
+  // Only accepted org members can be assigned; unknown ids are dropped.
+  const board = await prisma.board.findUnique({
+    where: { id: boardId },
+    select: { orgId: true },
+  });
+  const members = assigneeIds?.length
+    ? await prisma.membership.findMany({
+        where: {
+          orgId: board!.orgId,
+          accepted: true,
+          userId: { in: assigneeIds },
+        },
+        select: { userId: true },
+      })
+    : [];
 
   // Single-row insert — atomic on its own, no transaction needed. Two
   // creates in the same column at the same instant can compute the same
@@ -104,6 +125,12 @@ router.post("/issue", async (req, res) => {
           boardId,
           sectionId,
           position: generateKeyBetween(last?.position ?? null, null),
+          users: { create: members.map((m) => ({ userId: m.userId })) },
+        },
+        include: {
+          users: {
+            select: { user: { select: { id: true, name: true } } },
+          },
         },
       }),
     );
@@ -122,7 +149,7 @@ router.post("/issue", async (req, res) => {
 });
 
 router.put("/issue", async (req, res) => {
-  const { issueId, title, description } = req.body;
+  const { issueId, title, description, assigneeIds } = req.body;
   const existing = await prisma.issue.findUnique({
     where: { id: issueId },
     select: { boardId: true },
@@ -131,15 +158,51 @@ router.put("/issue", async (req, res) => {
     res.status(404).json({ error: "Issue not found" });
     return;
   }
-  res.json(
-    await prisma.issue.update({
+
+  // Optional assignee sync: replace the current set with the given members.
+  // Only accepted org members are assignable; unknown ids are dropped.
+  let assigneeCreate: { userId: string }[] | undefined;
+  if (Array.isArray(assigneeIds)) {
+    const board = await prisma.board.findUnique({
+      where: { id: existing.boardId },
+      select: { orgId: true },
+    });
+    const members = await prisma.membership.findMany({
+      where: {
+        orgId: board!.orgId,
+        accepted: true,
+        userId: { in: assigneeIds },
+      },
+      select: { userId: true },
+    });
+    assigneeCreate = members.map((m) => ({ userId: m.userId }));
+  }
+
+  const issue = await prisma.$transaction(async (tx) => {
+    const updated = await tx.issue.update({
       where: { id: issueId },
       data: {
         ...(title !== undefined && { title }),
         ...(description !== undefined && { description }),
       },
-    }),
-  );
+    });
+    if (assigneeCreate) {
+      await tx.issueMapping.deleteMany({ where: { issueId } });
+      if (assigneeCreate.length > 0) {
+        await tx.issueMapping.createMany({
+          data: assigneeCreate.map((a) => ({ ...a, issueId })),
+        });
+      }
+    }
+    return tx.issue.findUnique({
+      where: { id: issueId },
+      include: {
+        users: { select: { user: { select: { id: true, name: true } } } },
+      },
+    });
+  });
+
+  res.json(issue);
 });
 
 // Fractional indexing: the client computes a key that sorts between the

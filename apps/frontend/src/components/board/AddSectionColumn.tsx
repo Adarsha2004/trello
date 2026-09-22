@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { createSection } from "@/lib/api";
+import { useBoard } from "@/pages/BoardPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -14,11 +15,13 @@ export function AddSectionColumn({ boardId }: AddSectionColumnProps) {
   const [title, setTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const { broadcastBoardUpdate } = useBoard();
 
   const mutation = useMutation({
     mutationFn: () => createSection(title.trim(), boardId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
+      broadcastBoardUpdate("sections");
       setTitle("");
       setOpen(true);
       inputRef.current?.focus();

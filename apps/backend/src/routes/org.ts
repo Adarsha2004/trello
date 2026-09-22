@@ -51,6 +51,29 @@ router.delete("/organization", async (req, res) => {
   
 });
 
+router.get("/members", async (req, res) => {
+  const { orgId } = req.query;
+
+  const caller = await prisma.membership.findUnique({
+    where: { userId_orgId: { userId: req.userId!, orgId: orgId as string } },
+  });
+  if (!caller || !caller.accepted) {
+    res.status(403).json({ error: "Not a member of this organization" });
+    return;
+  }
+
+  const memberships = await prisma.membership.findMany({
+    where: { orgId: orgId as string, accepted: true },
+    select: {
+      user: { select: { id: true, name: true, email: true } },
+      role: true,
+    },
+    orderBy: { user: { name: "asc" } },
+  });
+
+  res.json(memberships.map((m) => ({ ...m.user, role: m.role })));
+});
+
 router.get("/invitations", async (req, res) => {
   const memberships = await prisma.membership.findMany({
     where: { userId: req.userId, accepted: false },

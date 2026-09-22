@@ -3,8 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDrop } from "react-dnd";
 import { generateKeyBetween } from "fractional-indexing";
 import { Plus, X } from "lucide-react";
-import { createIssue, type Issue, type Section } from "@/lib/api";
+import { createIssue, type Issue, type OrgMember, type Section } from "@/lib/api";
+import { useBoard } from "@/pages/BoardPage";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { IssueCard } from "@/components/board/IssueCard";
 import { ITEM_TYPES, type DraggedIssue, type MoveIssueAction } from "@/lib/dnd";
@@ -14,6 +16,7 @@ interface SectionColumnProps {
   section: Section;
   issues: Issue[];
   boardId: string;
+  members: OrgMember[];
   onMoveIssue: (action: MoveIssueAction) => void;
 }
 
@@ -21,15 +24,27 @@ export function SectionColumn({
   section,
   issues,
   boardId,
+  members,
   onMoveIssue,
 }: SectionColumnProps) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [description, setDescription] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const { broadcastBoardUpdate } = useBoard();
+
+  const toggleAssignee = (userId: string) =>
+    setAssigneeIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId],
+    );
 
   // Which issue index the card is hovering over (-1 = end of column)
   const hoverIndexRef = useRef(-1);
+  const listRef = useRef<HTMLDivElement>(null);
   const [{ isOver }, dropRef] = useDrop({
     accept: ITEM_TYPES.issue,
     drop: (item: DraggedIssue) => {
@@ -79,17 +94,26 @@ export function SectionColumn({
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createIssue(title.trim(), section.id, boardId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["issues", boardId] });
+    mutationFn: () =>
+      createIssue(
+        title.trim(),
+        section.id,
+        boardId,
+        description.trim() || undefined,
+        assigneeIds.length ? assigneeIds : undefined,
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["issues", boardId] });
+      broadcastBoardUpdate("issues");
       setTitle("");
-      setComposerOpen(true);
-      textareaRef.current?.focus();
+      setDescription("");
+      setAssigneeIds([]);
+      setComposerOpen(false);
     },
   });
 
   useEffect(() => {
-    if (composerOpen) textareaRef.current?.focus();
+    if (composerOpen) inputRef.current?.focus();
   }, [composerOpen]);
 
   const closeComposer = () => {
@@ -104,10 +128,20 @@ export function SectionColumn({
     createMutation.mutate();
   };
 
-  // Position before issue i if dragged-over issue's midpoint is below the cursor
-  const indexBefore = (e: React.DragEvent, i: number) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    return e.clientY < rect.top + rect.height / 2 ? i : i + 1;
+  // Insertion index from cursor y: before the first card whose midpoint is
+  // below the cursor, otherwise end of column. Uses element rects so it is
+  // also correct when hovering the gap between cards.
+  const indexFromPointer = (e: React.DragEvent) => {
+    const cards = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>("[data-card-idx]") ?? [],
+    );
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        return Number(card.dataset.cardIdx);
+      }
+    }
+    return -1;
   };
 
   return (
@@ -123,24 +157,29 @@ export function SectionColumn({
         <span className="text-muted-foreground text-xs">{issues.length}</span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+      <div
+        ref={listRef}
+        className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2"
+        onDragOver={(e) => {
+          e.preventDefault();
+          hoverIndexRef.current = indexFromPointer(e);
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            hoverIndexRef.current = -1;
+          }
+        }}
+      >
         {issues.map((issue, i) => (
-          <div
-            key={issue.id}
-            onDragOver={(e) => {
-              e.preventDefault();
-              hoverIndexRef.current = indexBefore(e, i);
-            }}
-            onDragLeave={() => (hoverIndexRef.current = -1)}
-          >
-            <IssueCard issue={issue} />
+          <div key={issue.id} data-card-idx={i}>
+            <IssueCard issue={issue} members={members} />
           </div>
         ))}
 
         {composerOpen ? (
           <form onSubmit={onSubmit} className="flex flex-col gap-2">
-            <Textarea
-              ref={textareaRef}
+            <Input
+              ref={inputRef}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => {
@@ -150,9 +189,34 @@ export function SectionColumn({
                 }
               }}
               placeholder="Enter a title for this issue..."
+              className="bg-card"
+            />
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add a description (optional)..."
               rows={3}
               className="resize-none bg-card"
             />
+            {members.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {members.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => toggleAssignee(member.id)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                      assigneeIds.includes(member.id)
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {member.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Button
                 type="submit"
