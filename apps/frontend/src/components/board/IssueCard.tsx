@@ -35,19 +35,43 @@ export function IssueCard({ issue, members }: IssueCardProps) {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ["issues", issue.boardId] });
 
+  // Optimistic: remove the card from its section's list immediately and
+  // restore the snapshot if the server rejects the delete.
   const deleteMutation = useMutation({
     mutationFn: () => deleteIssue(issue.id),
-    onSuccess: () => {
-      invalidate();
-      broadcastBoardUpdate("issues");
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["issues", issue.boardId] });
+      const prev = queryClient.getQueryData<Record<string, Issue[]>>([
+        "issues",
+        issue.boardId,
+      ]);
+      queryClient.setQueryData<Record<string, Issue[]>>(
+        ["issues", issue.boardId],
+        (old) => {
+          const list = old?.[issue.sectionId];
+          if (!old || !list) return old;
+          return {
+            ...old,
+            [issue.sectionId]: list.filter((i) => i.id !== issue.id),
+          };
+        },
+      );
+      return { prev };
     },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prev) {
+        queryClient.setQueryData(["issues", issue.boardId], ctx.prev);
+      }
+    },
+    onSuccess: () => broadcastBoardUpdate("issues"),
+    onSettled: () => invalidate(),
   });
 
   const editMutation = useMutation({
     mutationFn: () =>
       updateIssue(issue.id, {
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: description.trim(),
         assigneeIds,
       }),
     onSuccess: async () => {
@@ -81,7 +105,7 @@ export function IssueCard({ issue, members }: IssueCardProps) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (title.trim()) editMutation.mutate();
+          if (title.trim() && description.trim()) editMutation.mutate();
         }}
         onMouseDown={stopDrag}
         onTouchStart={stopDrag}
@@ -97,7 +121,7 @@ export function IssueCard({ issue, members }: IssueCardProps) {
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Add a description (optional)..."
+          placeholder="Add a description..."
           rows={3}
           className="resize-none bg-card"
         />
@@ -124,7 +148,9 @@ export function IssueCard({ issue, members }: IssueCardProps) {
           <Button
             type="submit"
             size="sm"
-            disabled={!title.trim() || editMutation.isPending}
+            disabled={
+              !title.trim() || !description.trim() || editMutation.isPending
+            }
           >
             {editMutation.isPending ? "Saving..." : "Save"}
           </Button>

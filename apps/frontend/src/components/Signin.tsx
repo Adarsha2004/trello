@@ -53,7 +53,24 @@ export function Signin() {
     onSuccess: () => setMagicLinkSent(true),
   });
 
-  const error = magicLinkMutation.isError ? magicLinkMutation.error.message : null;
+  const socialMutation = useMutation({
+    mutationFn: async (provider: "google" | "github") => {
+      const { error } = await authClient.signIn.social({
+        provider,
+        // Absolute URL for the same reason as the magic link above.
+        callbackURL: `${window.location.origin}/organisations`,
+      });
+      if (error) {
+        throw new Error(error.message ?? `Failed to sign in with ${provider}`);
+      }
+    },
+  });
+
+  const error = magicLinkMutation.isError
+    ? magicLinkMutation.error.message
+    : socialMutation.isError
+      ? socialMutation.error.message
+      : null;
 
   return (
     <Card className="w-full max-w-4xl overflow-hidden p-0 md:flex-row">
@@ -106,8 +123,8 @@ export function Signin() {
             type="button"
             variant="outline"
             className="w-full"
-            disabled
-            title="Coming soon"
+            disabled={socialMutation.isPending}
+            onClick={() => socialMutation.mutate("google")}
           >
             <GoogleIcon />
             Sign in with Google
@@ -116,8 +133,8 @@ export function Signin() {
             type="button"
             variant="outline"
             className="w-full"
-            disabled
-            title="Coming soon"
+            disabled={socialMutation.isPending}
+            onClick={() => socialMutation.mutate("github")}
           >
             <GithubIcon />
             Sign in with GitHub

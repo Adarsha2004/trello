@@ -2,13 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDrop } from "react-dnd";
 import { generateKeyBetween } from "fractional-indexing";
-import { Plus, X } from "lucide-react";
-import { createIssue, type Issue, type OrgMember, type Section } from "@/lib/api";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  createIssue,
+  deleteSection,
+  updateSection,
+  type Issue,
+  type OrgMember,
+  type Section,
+} from "@/lib/api";
 import { useBoard } from "@/pages/BoardPage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { IssueCard } from "@/components/board/IssueCard";
+import { InputTitleEdit } from "@/components/board/InputTitleEdit";
 import { ITEM_TYPES, type DraggedIssue, type MoveIssueAction } from "@/lib/dnd";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +39,8 @@ export function SectionColumn({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [sectionTitle, setSectionTitle] = useState(section.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { broadcastBoardUpdate } = useBoard();
@@ -99,7 +109,7 @@ export function SectionColumn({
         title.trim(),
         section.id,
         boardId,
-        description.trim() || undefined,
+        description.trim(),
         assigneeIds.length ? assigneeIds : undefined,
       ),
     onSuccess: async () => {
@@ -111,6 +121,70 @@ export function SectionColumn({
       setComposerOpen(false);
     },
   });
+
+  // Optimistic: drop the section (and its cascaded issues) from the cache
+  // immediately; the server confirms or the snapshot is restored.
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteSection(section.id),
+    onMutate: async () => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: ["sections", boardId] }),
+        queryClient.cancelQueries({ queryKey: ["issues", boardId] }),
+      ]);
+      const prevSections = queryClient.getQueryData<Section[]>([
+        "sections",
+        boardId,
+      ]);
+      const prevIssues = queryClient.getQueryData<Record<string, Issue[]>>([
+        "issues",
+        boardId,
+      ]);
+      queryClient.setQueryData<Section[]>(["sections", boardId], (old) =>
+        old?.filter((s) => s.id !== section.id),
+      );
+      queryClient.setQueryData<Record<string, Issue[]>>(["issues", boardId], (old) => {
+        if (!old) return old;
+        const next = { ...old };
+        delete next[section.id];
+        return next;
+      });
+      return { prevSections, prevIssues };
+    },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prevSections) {
+        queryClient.setQueryData(["sections", boardId], ctx.prevSections);
+      }
+      if (ctx?.prevIssues) {
+        queryClient.setQueryData(["issues", boardId], ctx.prevIssues);
+      }
+    },
+    onSuccess: () => broadcastBoardUpdate("all"),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
+      queryClient.invalidateQueries({ queryKey: ["issues", boardId] });
+    },
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: () => updateSection(section.id, sectionTitle.trim()),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
+      broadcastBoardUpdate("sections");
+      setEditingTitle(false);
+    },
+  });
+
+  const startRename = () => {
+    setSectionTitle(section.title);
+    renameMutation.reset();
+    setEditingTitle(true);
+  };
+
+  const cancelRename = () => {
+    setSectionTitle(section.title);
+    renameMutation.reset();
+    setEditingTitle(false);
+  };
 
   useEffect(() => {
     if (composerOpen) inputRef.current?.focus();
@@ -124,7 +198,7 @@ export function SectionColumn({
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim() || !description.trim()) return;
     createMutation.mutate();
   };
 
@@ -148,18 +222,75 @@ export function SectionColumn({
     <div
       ref={dropRef as unknown as React.Ref<HTMLDivElement>}
       className={cn(
-        "bg-muted/50 flex max-h-full w-72 shrink-0 flex-col rounded-xl transition-colors",
+        "bg-muted/50 group/section flex max-h-full w-72 shrink-0 flex-col rounded-xl transition-colors",
         isOver && "bg-muted/80 ring-primary/40 ring-2",
       )}
     >
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <h2 className="truncate text-sm font-semibold">{section.title}</h2>
-        <span className="text-muted-foreground text-xs">{issues.length}</span>
+      <div className="flex items-center justify-between gap-1 px-3 py-2.5">
+        {editingTitle ? (
+          <InputTitleEdit
+            value={sectionTitle}
+            onChange={setSectionTitle}
+            onSave={() => {
+              if (sectionTitle.trim() === section.title) {
+                cancelRename();
+                return;
+              }
+              renameMutation.mutate();
+            }}
+            onCancel={cancelRename}
+            isPending={renameMutation.isPending}
+            placeholder="Section title"
+          />
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-0.5">
+            <h2 className="truncate text-sm font-semibold">
+              {section.title}
+            </h2>
+            <button
+              type="button"
+              aria-label="Edit section title"
+              title="Edit section title"
+              onClick={startRename}
+              className={cn(
+                "shrink-0 rounded-md p-1 transition-colors",
+                "text-muted-foreground/60 hover:bg-muted hover:text-foreground",
+                "opacity-0 group-hover/section:opacity-100 focus-visible:opacity-100",
+              )}
+            >
+              <Pencil className="size-3" />
+            </button>
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-muted-foreground text-xs">{issues.length}</span>
+          <button
+            type="button"
+            aria-label="Delete section"
+            title="Delete section"
+            disabled={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+            className={cn(
+              "rounded-md p-1 transition-colors",
+              "text-muted-foreground/60 hover:bg-muted hover:text-destructive",
+              "disabled:opacity-50",
+            )}
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
       </div>
+      {editingTitle && renameMutation.isError && (
+        <p className="text-destructive px-3 pb-1 text-xs">
+          {renameMutation.error instanceof Error
+            ? renameMutation.error.message
+            : "Failed to rename section"}
+        </p>
+      )}
 
       <div
         ref={listRef}
-        className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2"
+        className="no-scrollbar flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2"
         onDragOver={(e) => {
           e.preventDefault();
           hoverIndexRef.current = indexFromPointer(e);
@@ -185,7 +316,9 @@ export function SectionColumn({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  if (title.trim()) createMutation.mutate();
+                  if (title.trim() && description.trim()) {
+                    createMutation.mutate();
+                  }
                 }
               }}
               placeholder="Enter a title for this issue..."
@@ -194,7 +327,7 @@ export function SectionColumn({
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add a description (optional)..."
+              placeholder="Add a description..."
               rows={3}
               className="resize-none bg-card"
             />
@@ -221,7 +354,9 @@ export function SectionColumn({
               <Button
                 type="submit"
                 size="sm"
-                disabled={!title.trim() || createMutation.isPending}
+                disabled={
+                  !title.trim() || !description.trim() || createMutation.isPending
+                }
               >
                 {createMutation.isPending ? "Adding..." : "Add issue"}
               </Button>

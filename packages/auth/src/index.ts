@@ -20,6 +20,27 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  // Social sign-in providers are registered only when their credentials
+  // are configured — the app boots fine without them (attempts just fail
+  // with a clear error).
+  socialProviders: {
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : {}),
+    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+      ? {
+          github: {
+            clientId: process.env.GITHUB_CLIENT_ID,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET,
+          },
+        }
+      : {}),
+  },
   plugins: [
     magicLink({
       sendMagicLink: async ({ email, url }) => {

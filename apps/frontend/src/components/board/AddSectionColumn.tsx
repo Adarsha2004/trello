@@ -19,8 +19,8 @@ export function AddSectionColumn({ boardId }: AddSectionColumnProps) {
 
   const mutation = useMutation({
     mutationFn: () => createSection(title.trim(), boardId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
+    onSuccess: async() => {
+      await queryClient.invalidateQueries({ queryKey: ["sections", boardId] });
       broadcastBoardUpdate("sections");
       setTitle("");
       setOpen(true);

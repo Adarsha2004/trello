@@ -40,37 +40,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="bg-background sticky top-0 border-b">
-        <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-4 border rounded-xl">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="gap-2">
-                  {AllOrganisations.isPending ? "Loading..." : selectedOrg ? selectedOrg.name : "No organisation"}
-                  <ChevronsUpDown className="size-4 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuLabel>Organisations</DropdownMenuLabel>
-                {AllOrganisations.data?.map((org) => (
-                  <DropdownMenuItem key={org.id} onClick={() => selectOrg(org.id)}>
-                    <Check className={org.id === selectedOrg?.id ? "opacity-100" : "opacity-0"} />
-                    {org.name}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/organisations">
-                    <Plus />
-                    Manage organisations
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
-
       <main className="flex flex-1 flex-col px-4 py-10">
         <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
           {AllOrganisations.isPending ? (
@@ -95,7 +64,30 @@ export default function DashboardPage() {
             <>
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-semibold">{selectedOrg.name}</h1>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="text-2xl font-semibold gap-2 h-auto py-1 px-2 -ml-2">
+                        {selectedOrg.name}
+                        <ChevronsUpDown className="size-4 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel>Organisations</DropdownMenuLabel>
+                      {AllOrganisations.data?.map((org) => (
+                        <DropdownMenuItem key={org.id} onClick={() => selectOrg(org.id)}>
+                          <Check className={org.id === selectedOrg?.id ? "opacity-100" : "opacity-0"} />
+                          {org.name}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/organisations">
+                          <Plus />
+                          Manage organisations
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <p className="text-muted-foreground text-sm">Boards</p>
                 </div>
                 <Button onClick={() => setCreateOpen(true)}>

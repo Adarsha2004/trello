@@ -127,6 +127,18 @@ export async function createSection(
   return res.data;
 }
 
+export async function deleteSection(sectionId: string): Promise<void> {
+  await api.delete("/api/section", { data: { sectionId } });
+}
+
+export async function updateSection(
+  sectionId: string,
+  title: string,
+): Promise<Section> {
+  const res = await api.put("/api/section", { sectionId, title });
+  return res.data;
+}
+
 export interface IssueAssignee {
   id: string;
   name: string;
@@ -157,7 +169,7 @@ export async function createIssue(
   title: string,
   sectionId: string,
   boardId: string,
-  description?: string,
+  description: string,
   assigneeIds?: string[],
 ): Promise<Issue> {
   const res = await api.post("/api/issue", {

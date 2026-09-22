@@ -193,14 +193,16 @@ export default function BoardPage() {
 
   if (boardPending) {
     return (
-      <p className="text-muted-foreground m-auto text-sm">Loading board...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground text-sm">Loading board...</p>
+      </div>
     );
   }
 
   if (boardQuery.isError || !boardQuery.data) {
     return (
-      <div className="m-auto flex flex-col items-center gap-4">
-        <p className="text-destructive text-sm">
+      <div className="text-destructive flex min-h-screen flex-col items-center justify-center gap-4">
+        <p className="text-sm">
           {boardQuery.error instanceof Error
             ? boardQuery.error.message
             : "Failed to load board"}
@@ -257,7 +259,7 @@ export default function BoardPage() {
           </div>
         </header>
 
-        <main className="flex flex-1 gap-4 overflow-x-auto p-4">
+        <main className="no-scrollbar flex flex-1 gap-4 overflow-x-auto p-4">
           {sectionsQuery.isPending ? (
             <p className="text-muted-foreground m-auto text-sm">
               Loading sections...

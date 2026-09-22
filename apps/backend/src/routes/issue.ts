@@ -82,6 +82,12 @@ router.get("/issue/:issueId", async (req, res) => {
 
 router.post("/issue", async (req, res) => {
   const { title, description, sectionId, boardId, assigneeIds } = req.body;
+  if (!title?.trim() || !description?.trim()) {
+    res
+      .status(400)
+      .json({ error: "Title and description are required" });
+    return;
+  }
   if (!(await canAccessBoard(req.userId, boardId))) {
     res.status(403).json({ error: "Not a member of this organization" });
     return;
@@ -156,6 +162,10 @@ router.put("/issue", async (req, res) => {
   });
   if (!existing || !(await canAccessBoard(req.userId, existing.boardId))) {
     res.status(404).json({ error: "Issue not found" });
+    return;
+  }
+  if (description !== undefined && !description.trim()) {
+    res.status(400).json({ error: "Description cannot be empty" });
     return;
   }
 
