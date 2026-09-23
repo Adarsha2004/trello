@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: adarshanatia/trello_frontend:2e30bf49d9901a61bcf5d12207c411b260e6c75e
+          image: adarshanatia/trello_frontend:9268d8836efe0385f42fb5f8c59042ac04d499c4
           ports:
             - containerPort: 5173
           resources:
