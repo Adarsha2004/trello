@@ -7,6 +7,7 @@ import SigninPage from "./pages/SigninPage";
 import OrganisationsPage from "./pages/OrganisationsPage";
 import DashboardPage from "./pages/DashboardPage";
 import BoardPage from "./pages/BoardPage";
+import { RequireAuth } from "@/components/RequireAuth";
 
 export function App() {
   return (
@@ -15,9 +16,30 @@ export function App() {
         <DndProvider backend={HTML5Backend}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/boards/:boardId" element={<BoardPage />} />
-            <Route path="/organisations" element={<OrganisationsPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <RequireAuth>
+                  <DashboardPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/boards/:boardId"
+              element={
+                <RequireAuth>
+                  <BoardPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/organisations"
+              element={
+                <RequireAuth>
+                  <OrganisationsPage />
+                </RequireAuth>
+              }
+            />
             <Route path="/signin" element={<SigninPage />} />
           </Routes>
         </DndProvider>

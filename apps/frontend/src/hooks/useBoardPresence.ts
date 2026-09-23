@@ -4,6 +4,7 @@ import type { MoveIssueAction } from "@/lib/dnd";
 export interface PresenceUser {
   id: string;
   name: string;
+  image?: string | null;
 }
 
 // Local dev: talk straight to the WS server. Everywhere else (cluster): same-origin, ingress routes /ws.
@@ -67,6 +68,7 @@ export function useBoardPresence(
           type?: string;
           userId?: string;
           name?: string;
+          image?: string | null;
           users?: PresenceUser[];
           issueId?: string;
           targetSectionId?: string;
@@ -82,9 +84,9 @@ export function useBoardPresence(
         if (message.type === "initial_state" && Array.isArray(message.users)) {
           setUsers(message.users);
         } else if (message.type === "join" && message.userId && message.name) {
-          const { userId, name } = message;
+          const { userId, name, image } = message;
           setUsers((prev) =>
-            prev.some((user) => user.id === userId) ? prev : [...prev, { id: userId, name }],
+            prev.some((user) => user.id === userId) ? prev : [...prev, { id: userId, name, image }],
           );
         } else if (message.type === "leave" && message.userId) {
           const { userId } = message;

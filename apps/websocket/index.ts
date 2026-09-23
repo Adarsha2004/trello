@@ -9,6 +9,7 @@ const server = new WebSocketServer({ port: Number(process.env.WS_PORT ?? 8080) }
 interface BoardUser {
   id: string;
   name: string;
+  image: string | null;
   ws: WebSocket;
 }
 
@@ -28,7 +29,9 @@ function broadcast(boardId: string, message: unknown, exclude?: WebSocket) {
 async function getSessionUser(req: IncomingMessage) {
   try {
     const session = await auth.api.getSession({ headers: req.headers });
-    return session ? { id: session.user.id, name: session.user.name } : null;
+    return session
+      ? { id: session.user.id, name: session.user.name, image: session.user.image ?? null }
+      : null;
   } catch {
     return null;
   }
@@ -37,7 +40,7 @@ async function getSessionUser(req: IncomingMessage) {
 server.on("connection", (socket, req) => {
   // Resolve the session asynchronously; gate message handling on it so a
   // client that sends "join" immediately isn't dropped while we query the DB.
-  let user: { id: string; name: string } | null = null;
+  let user: { id: string; name: string; image: string | null } | null = null;
   const ready = getSessionUser(req).then((sessionUser) => {
     user = sessionUser;
     if (!sessionUser) {
@@ -66,19 +69,19 @@ server.on("connection", (socket, req) => {
 
     if (parsed.type === "join" && parsed.boardId) {
       const { boardId } = parsed;
-      const { id, name } = user;
+      const { id, name, image } = user;
 
       if (!USERS[boardId]) {
         USERS[boardId] = [];
       }
 
       // Tell everyone else about the new user
-      broadcast(boardId, { type: "join", userId: id, name }, socket);
+      broadcast(boardId, { type: "join", userId: id, name, image }, socket);
 
-      USERS[boardId]!.push({ id, name, ws: socket });
+      USERS[boardId]!.push({ id, name, image, ws: socket });
 
       const others = new Map(
-        USERS[boardId]!.filter((u) => u.id !== id).map((u) => [u.id, { id: u.id, name: u.name }]),
+        USERS[boardId]!.filter((u) => u.id !== id).map((u) => [u.id, { id: u.id, name: u.name, image: u.image }]),
       );
       socket.send(JSON.stringify({ type: "initial_state", users: [...others.values()] }));
     }

@@ -36,14 +36,23 @@ export function PresenceAvatars({ users }: PresenceAvatarsProps) {
 
   return (
     <div className="flex items-center -space-x-2" title={users.map((user) => user.name).join(", ")}>
-      {shown.map((user) => (
-        <div
-          key={user.id}
-          className={`flex size-8 items-center justify-center rounded-full border-2 border-background text-xs font-semibold text-white ${colorFor(user.id)}`}
-        >
-          {initials(user.name)}
-        </div>
-      ))}
+      {shown.map((user) =>
+        user.image ? (
+          <img
+            key={user.id}
+            src={user.image}
+            alt={user.name}
+            className="border-background size-8 rounded-full border-2 object-cover"
+          />
+        ) : (
+          <div
+            key={user.id}
+            className={`flex size-8 items-center justify-center rounded-full border-2 border-background text-xs font-semibold text-white ${colorFor(user.id)}`}
+          >
+            {initials(user.name)}
+          </div>
+        ),
+      )}
       {overflow > 0 && (
         <div className="bg-muted flex size-8 items-center justify-center rounded-full border-2 border-background text-xs font-semibold">
           +{overflow}

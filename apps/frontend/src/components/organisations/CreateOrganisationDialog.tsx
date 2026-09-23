@@ -16,8 +16,8 @@ export function CreateOrganisationDialog({ open, onClose }: CreateOrganisationDi
 
   const mutation = useMutation({
     mutationFn: () => createOrganisation(orgName),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organisations"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["organisations"] });
       setOrgName("");
       onClose();
     },

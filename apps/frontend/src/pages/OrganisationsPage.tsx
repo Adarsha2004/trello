@@ -23,10 +23,12 @@ export default function OrganisationsPage() {
   });
 
   const acceptMutation = useMutation({
-    mutationFn: (orgId: string) => acceptInvitation(orgId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["invitations"] });
-      queryClient.invalidateQueries({ queryKey: ["organisations"] });
+    mutationFn: async (orgId: string) => {
+      await acceptInvitation(orgId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["invitations"] }),
+        queryClient.invalidateQueries({ queryKey: ["organisations"] }),
+      ]);
     },
   });
 
@@ -41,7 +43,7 @@ export default function OrganisationsPage() {
       ) : (
         <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
           <div className="flex items-center justify-between gap-4">
-            <div>
+            <div className="cursor-default">
               <h1 className="text-2xl font-semibold">Organisations</h1>
               <p className="text-muted-foreground text-sm">Organisations you are a part of</p>
             </div>
@@ -64,7 +66,7 @@ export default function OrganisationsPage() {
                     onClick={() => acceptMutation.mutate(org.id)}
                     disabled={acceptMutation.isPending}
                   >
-                    Accept {org.name}
+                    Accept invitation
                   </Button>
                 ))}
               </div>

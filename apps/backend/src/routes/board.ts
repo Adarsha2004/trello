@@ -78,17 +78,20 @@ router.delete("/board", async (req, res) => {
     return;
   }
 
-  if (!(await isMember(req.userId!, board.orgId))) {
-    res.status(403).json({ error: "Not a member of this organization" });
+  const caller = await prisma.membership.findUnique({
+    where: { userId_orgId: { userId: req.userId!, orgId: board.orgId } },
+  });
+  if (!caller || caller.role !== "ADMIN" || !caller.accepted) {
+    res.status(403).json({ error: "Admin access required" });
     return;
   }
-  
+
   await prisma.board.delete({ where: { id: boardId } });
-  
+
   res.json({
     message:"Board deleted: "+boardId
   });
-  
+
 });
 
 export default router;

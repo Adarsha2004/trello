@@ -50,12 +50,24 @@ export async function createOrganisation(
   return res.data;
 }
 
+export async function deleteOrganisation(
+  orgId: string,
+): Promise<{ message: string }> {
+  const res = await api.delete("/api/organization", { data: { orgId } });
+  return res.data;
+}
+
 export async function inviteMember(
   email: string,
   orgId: string,
 ): Promise<{ message: string }> {
   const res = await api.post("/api/invite", { email, orgId });
   return res.data;
+}
+
+export async function checkUserExists(email: string, orgId: string): Promise<boolean> {
+  const res = await api.get("/api/user-exists", { params: { email, orgId } });
+  return res.data.exists;
 }
 
 export async function getInvitations(): Promise<Organisation[]> {
@@ -95,6 +107,11 @@ export async function createBoard(
   orgId: string,
 ): Promise<Board> {
   const res = await api.post("/api/board", { title, orgId });
+  return res.data;
+}
+
+export async function deleteBoard(boardId: string): Promise<{ message: string }> {
+  const res = await api.delete("/api/board", { data: { boardId } });
   return res.data;
 }
 

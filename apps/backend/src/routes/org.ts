@@ -83,6 +83,22 @@ router.get("/invitations", async (req, res) => {
   res.json(memberships.map((m) => ({ ...m.org, role: m.role })));
 });
 
+router.get("/user-exists", async (req, res) => {
+  const { email, orgId } = req.query;
+
+  const caller = await prisma.membership.findUnique({
+    where: { userId_orgId: { userId: req.userId!, orgId: orgId as string } },
+  });
+  if (!caller || caller.role !== "ADMIN" || !caller.accepted) {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: email as string } });
+
+  res.json({ exists: !!user });
+});
+
 router.post("/invite", async (req, res) => {
   const { email, orgId } = req.body;
 
@@ -114,6 +130,33 @@ router.post("/invite", async (req, res) => {
   const membership = existing
     ? existing
     : await prisma.membership.create({ data: { userId: user.id, orgId: orgId, accepted: false } });
+
+  const org = await prisma.org.findUnique({ where: { id: orgId } });
+
+  if (process.env.RESEND_API_KEY && org) {
+    const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+    try {
+      const mail = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: process.env.MAIL_FROM ?? "Trello <onboarding@resend.dev>",
+          to: email,
+          subject: `You've been invited to join ${org.name}`,
+          text: `You've been invited to join "${org.name}". Accept it here: ${frontendUrl}/organisations`,
+          html: `<p>You've been invited to join <strong>${org.name}</strong>.</p><p><a href="${frontendUrl}/organisations">Accept invitation</a></p>`,
+        }),
+      });
+      if (!mail.ok) {
+        console.error(`[invite] Resend error ${mail.status}:`, await mail.text());
+      }
+    } catch (err) {
+      console.error("[invite] Failed to send email:", err);
+    }
+  }
 
   res.json({
     message: "Invitation sent"

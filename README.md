@@ -1,159 +1,131 @@
-# Turborepo starter
+# Trello
 
-This Turborepo starter is maintained by the Turborepo core team.
+A Trello-style project management app — organisations, boards, sections, and issues with drag-and-drop and real-time collaboration. Built as a Bun monorepo and deployed to Kubernetes with ArgoCD.
 
-## Using this example
+Live at: **https://trello.adarshanatia.xyz**
 
-Run the following command:
+## Features
 
-```sh
-npx create-turbo@latest
+- **Auth** — magic link (email) + OAuth (Google, GitHub) via Better Auth, cookie-based sessions, route guards on protected pages
+- **Organisations** — create/delete (admin only), invite members by email with a debounced account check, email invitations via Resend, accept pending invitations, ADMIN/MEMBER roles
+- **Boards** — create/delete (admin only), kanban sections, drag-and-drop issues (fractional indexing for stable ordering)
+- **Realtime** — WebSocket presence with live avatars and profile pictures, instant sync of issue moves and board updates across clients
+- **UI** — React 19 SPA, Tailwind CSS v4, shadcn/ui components, TanStack Query for data fetching/caching, lucide icons
+
+## Tech Stack
+
+| Layer      | Tech                                                                  |
+| ---------- | --------------------------------------------------------------------- |
+| Frontend   | React 19, react-router, TanStack Query, react-dnd, Tailwind v4, shadcn/ui |
+| Backend    | Express (Bun runtime), Better Auth                                   |
+| Realtime   | `ws` WebSocket server with Better Auth session validation             |
+| Database   | PostgreSQL (Neon) + Prisma ORM                                        |
+| Email      | Resend (magic links + org invitations)                                |
+| Monorepo   | Bun workspaces + Turborepo                                            |
+| Deploy     | Docker, GitHub Actions, Kubernetes (GKE), ArgoCD, sealed-secrets      |
+
+## Repository Structure
+
+```
+apps/
+  frontend/     React SPA (served on :5173)
+  backend/      Express API (served on :3000)
+  websocket/    WS server for presence + realtime (served on :8080)
+packages/
+  db/           Prisma schema + generated client
+  auth/         Better Auth server config + React client
+  ui/           Shared UI stubs
+k8s/            Kubernetes manifests (ArgoCD watches this path)
+docker/         Dockerfiles per app
+.github/        CD workflows (build images, bump manifests)
 ```
 
-## What's inside?
+## Local Development
 
-This Turborepo includes the following packages/apps:
+Prerequisites: [Bun](https://bun.sh) >= 1.3 and a PostgreSQL database (e.g. a free [Neon](https://neon.tech) project).
 
-### Apps and Packages
+1. Install dependencies:
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+   ```sh
+   bun install
+   ```
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+2. Create a `.env` in the repo root (all apps read it via `dotenv`):
 
-### Utilities
+   ```env
+   DATABASE_URL="postgresql://..."          # Postgres connection string
+   BETTER_AUTH_SECRET="<random 32+ chars>"  # openssl rand -hex 32
+   BACKEND_PORT=3000
+   FRONTEND_URL="http://localhost:5173"     # CORS + Better Auth trusted origins
+   BACKEND_URL="http://localhost:3000"      # Better Auth baseURL
+   WS_PORT=8080
 
-This Turborepo has some additional tools already setup for you:
+   RESEND_API_KEY="re_..."                  # optional; magic links log to console without it
+   MAIL_FROM="Trello <noreply@yourdomain>"
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+   GOOGLE_CLIENT_ID=                        # optional; sign-in buttons error until filled
+   GOOGLE_CLIENT_SECRET=
+   GITHUB_CLIENT_ID=
+   GITHUB_CLIENT_SECRET=
+   ```
 
-### Build
+3. Generate the Prisma client and run migrations:
 
-To build all apps and packages, run the following command:
+   ```sh
+   bun run db:generate
+   bun run db:migrate
+   ```
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+4. Start the three apps (in separate terminals or via turbo):
 
-```sh
-cd my-turborepo
-turbo build
-```
+   ```sh
+   bun run start:web        # http://localhost:5173
+   bun run start:backend    # http://localhost:3000
+   bun run start:websocket  # ws://localhost:8080
+   ```
 
-Without global `turbo`, use your package manager:
+   Or all at once: `bun run dev`
 
-```sh
-cd my-turborepo
-npx turbo build
-bun dlx turbo build
-bun exec turbo build
-```
+Note: after editing `.env`, restart the processes — `bun --hot` reloads code, not env files.
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
-```
-
-Without global `turbo`:
+### Type checks / lint / build
 
 ```sh
-npx turbo build --filter=docs
-bun exec turbo build --filter=docs
-bun exec turbo build --filter=docs
+bun run check-types
+bun run lint
+bun run build
 ```
 
-### Develop
+## OAuth Provider Setup
 
-To develop all apps and packages, run the following command:
+Both providers are optional — the auth server only registers a provider when both its credentials are present. Callback URL pattern: `<BACKEND_URL>/api/auth/callback/<provider>`.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+**Google** (console.cloud.google.com → APIs & Services → Credentials):
+
+- Redirect URI: `http://localhost:3000/api/auth/callback/google` (dev) and `https://trello.adarshanatia.xyz/api/auth/callback/google` (prod) — both can live on one client
+- JavaScript origin: your frontend URL
+
+**GitHub** (github.com → Settings → Developer settings → OAuth Apps):
+
+- Callback URL: `http://localhost:3000/api/auth/callback/github` — GitHub allows only **one** callback per app, so create a second app for prod: `https://trello.adarshanatia.xyz/api/auth/callback/github`
+
+## Deployment
+
+Pushes to `main` deploy automatically:
+
+1. **GitHub Actions** (`cd_backend.yml`, `cd_frontend.yml`, `cd_ws.yml`) build each app's Docker image, push it to Docker Hub tagged with the commit SHA, and commit the new image tag into `k8s/*.yml`
+2. **ArgoCD** watches the `k8s/` path on `main` (auto-sync + self-heal + prune) and applies the manifests to the GKE cluster
+3. **Ingress** (nginx + cert-manager/Let's Encrypt) routes `trello.adarshanatia.xyz`: `/api` → backend, `/ws` → websocket, `/` → frontend
+
+Secrets live in the `trello-secrets` SealedSecret (encrypted with the cluster's sealed-secrets controller via `kubeseal`). To add or rotate a secret:
 
 ```sh
-cd my-turborepo
-turbo dev
+kubectl create secret generic trello-secrets --dry-run=client -o yaml \
+  --from-literal=KEY=value | \
+  kubeseal --controller-name=sealed-secrets-controller \
+           --controller-namespace=sealed-secrets -o yaml >> k8s/sealed-secret.yml
 ```
 
-Without global `turbo`, use your package manager:
+Commit and push — ArgoCD applies it, then `kubectl rollout restart deployment/<app>` picks up new env vars.
 
-```sh
-cd my-turborepo
-npx turbo dev
-bun exec turbo dev
-bun exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-bun exec turbo dev --filter=web
-bun exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-bun exec turbo login
-bun exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-bun exec turbo link
-bun exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+> Changes to `k8s/` must go through git; manual `kubectl apply`/`edit` is reverted by ArgoCD's self-heal.

@@ -17,8 +17,8 @@ export function CreateBoardDialog({ orgId, open, onClose }: CreateBoardDialogPro
 
   const mutation = useMutation({
     mutationFn: () => createBoard(title, orgId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["boards", orgId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["boards", orgId] });
       setTitle("");
       onClose();
     },

@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { apiErrorMessage, inviteMember } from "@/lib/api";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { apiErrorMessage, checkUserExists, getOrgMembers, inviteMember } from "@/lib/api";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,9 +15,41 @@ interface InviteMemberDialogProps {
   onClose: () => void;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function InviteMemberDialog({ orgId, orgName, open, onClose }: InviteMemberDialogProps) {
   const [email, setEmail] = useState("");
+  const [debouncedEmail, setDebouncedEmail] = useState("");
   const [invited, setInvited] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedEmail(email.trim()), 400);
+    return () => clearTimeout(t);
+  }, [email]);
+
+  const emailValid = EMAIL_RE.test(debouncedEmail);
+
+  const { data: me } = useCurrentUser();
+  const isSelf = emailValid && !!me && debouncedEmail.toLowerCase() === me.email.toLowerCase();
+
+  const { data: members } = useQuery({
+    queryKey: ["members", orgId],
+    queryFn: () => getOrgMembers(orgId),
+    enabled: open,
+  });
+  const isMember =
+    emailValid &&
+    !!members?.some((member) => member.email.toLowerCase() === debouncedEmail.toLowerCase());
+
+  const existsQuery = useQuery({
+    queryKey: ["user-exists", debouncedEmail, orgId],
+    queryFn: () => checkUserExists(debouncedEmail, orgId),
+    enabled: open && emailValid && !isSelf && !isMember,
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const userExists = emailValid && !isSelf && !isMember && existsQuery.data === true;
 
   const mutation = useMutation({
     mutationFn: () => inviteMember(email.trim(), orgId),
@@ -42,7 +77,7 @@ export function InviteMemberDialog({ orgId, orgName, open, onClose }: InviteMemb
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!userExists) return;
     setInvited(null);
     mutation.mutate();
   };
@@ -69,15 +104,30 @@ export function InviteMemberDialog({ orgId, orgName, open, onClose }: InviteMemb
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="teammate@example.com"
-              autoFocus
-              required
-            />
+            <div className="relative">
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="teammate@example.com"
+                autoFocus
+                required
+                aria-invalid={
+                  emailValid &&
+                  !existsQuery.isFetching &&
+                  (isSelf || isMember || existsQuery.data === false)
+                }
+                className={cn(
+                  "pr-9",
+                  userExists &&
+                    "border-green-600 focus-visible:border-green-600 focus-visible:ring-green-600/20",
+                )}
+              />
+              {emailValid && !isSelf && !isMember && existsQuery.isFetching && (
+                <Loader2 className="text-muted-foreground pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin" />
+              )}
+            </div>
           </div>
           {mutation.isError && (
             <p className="text-destructive text-sm">
@@ -89,7 +139,7 @@ export function InviteMemberDialog({ orgId, orgName, open, onClose }: InviteMemb
             <Button type="button" variant="outline" onClick={onClose}>
               Done
             </Button>
-            <Button type="submit" disabled={mutation.isPending || !email.trim()}>
+            <Button type="submit" disabled={mutation.isPending || !userExists}>
               {mutation.isPending ? "Inviting..." : "Send invite"}
             </Button>
           </div>

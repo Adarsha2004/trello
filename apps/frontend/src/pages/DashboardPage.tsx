@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BoardCard } from "@/components/dashboard/BoardCard";
 import { CreateBoardDialog } from "@/components/dashboard/CreateBoardDialog";
+import { MembersMenu } from "@/components/dashboard/MembersMenu";
 import { UserMenu } from "@/components/UserMenu";
 
 export default function DashboardPage() {
@@ -90,9 +91,16 @@ export default function DashboardPage() {
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <p className="text-muted-foreground text-sm">Boards</p>
+                  <p className="text-muted-foreground cursor-default text-sm">Boards</p>
                 </div>
-                <UserMenu />
+                <div className="flex items-center gap-2">
+                  <MembersMenu
+                    orgId={selectedOrg.id}
+                    orgName={selectedOrg.name}
+                    canInvite={selectedOrg.role === "ADMIN"}
+                  />
+                  <UserMenu />
+                </div>
               </div>
 
               {boardsPending ? (
@@ -100,7 +108,7 @@ export default function DashboardPage() {
               ) : boards && boards.length > 0 ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {boards.map((board) => (
-                    <BoardCard key={board.id} board={board} />
+                    <BoardCard key={board.id} board={board} canDelete={selectedOrg.role === "ADMIN"} />
                   ))}
                   <button onClick={() => setCreateOpen(true)} className="text-start">
                     <Card className="gap-4 border-dashed py-5 transition-shadow hover:shadow-md">
