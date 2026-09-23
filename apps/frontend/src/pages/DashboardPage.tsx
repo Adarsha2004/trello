@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { getBoards, getOrganisations } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BoardCard } from "@/components/dashboard/BoardCard";
 import { CreateBoardDialog } from "@/components/dashboard/CreateBoardDialog";
+import { UserMenu } from "@/components/UserMenu";
 
 export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -90,10 +92,7 @@ export default function DashboardPage() {
                   </DropdownMenu>
                   <p className="text-muted-foreground text-sm">Boards</p>
                 </div>
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Plus />
-                  New board
-                </Button>
+                <UserMenu />
               </div>
 
               {boardsPending ? (
@@ -103,6 +102,16 @@ export default function DashboardPage() {
                   {boards.map((board) => (
                     <BoardCard key={board.id} board={board} />
                   ))}
+                  <button onClick={() => setCreateOpen(true)} className="text-start">
+                    <Card className="gap-4 border-dashed py-5 transition-shadow hover:shadow-md">
+                      <CardContent className="flex items-center gap-4">
+                        <div className="bg-muted text-muted-foreground flex size-11 shrink-0 items-center justify-center rounded-lg">
+                          <Plus className="size-5" />
+                        </div>
+                        <span className="text-muted-foreground font-semibold">New board</span>
+                      </CardContent>
+                    </Card>
+                  </button>
                 </div>
               ) : (
                 <div className="text-muted-foreground m-auto flex flex-col items-center gap-4">
