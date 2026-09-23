@@ -227,56 +227,36 @@ function HowItWorks() {
 }
 
 function About() {
+  const { data: user } = useCurrentUser();
+
   return (
     <section id="about" className="scroll-mt-24 border-t border-white/10 py-24">
-      <div className="mx-auto grid max-w-6xl gap-12 px-8 lg:grid-cols-2">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-8 lg:grid-cols-2">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-white md:text-4xl">
             About Trello
           </h2>
-          <p className="mt-6 leading-relaxed text-zinc-400">
+          <p className="mt-6 max-w-2xl leading-relaxed text-zinc-400">
             Trello brings your projects to life with boards, sections, and
             cards. Create organisations, invite your team, and give every
             project a home that everyone understands.
           </p>
         </div>
-        <div className="flex flex-col gap-4">
-          {[
-            "Boards, sections, and cards for any workflow",
-            "Organisations with admin and member roles",
-            "Passwordless sign-in with magic links, Google, or GitHub",
-            "Instant updates over websockets",
-          ].map((item) => (
-            <div key={item} className="flex items-start gap-3">
-              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-white" />
-              <p className="text-zinc-400">{item}</p>
-            </div>
-          ))}
+        <div className="flex flex-col items-start gap-6">
+          <h2 className="max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
+            Ready to ditch the spreadsheet?
+          </h2>
+          <p className="max-w-xl text-lg text-zinc-400">
+            Set up your first board in minutes and see your work clearly.
+          </p>
+          <Button
+            asChild
+            size="lg"
+            className="bg-white text-lg text-zinc-950 hover:bg-zinc-200"
+          >
+            <Link to={user ? "/dashboard" : "/signin"}>Get started</Link>
+          </Button>
         </div>
-      </div>
-    </section>
-  );
-}
-
-function CallToAction() {
-  const { data: user } = useCurrentUser();
-
-  return (
-    <section className="border-t border-white/10 py-24">
-      <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-8 text-center">
-        <h2 className="max-w-2xl text-3xl font-bold tracking-tight text-white md:text-4xl">
-          Ready to ditch the spreadsheet?
-        </h2>
-        <p className="max-w-xl text-lg text-zinc-400">
-          Set up your first board in minutes and see your work clearly.
-        </p>
-        <Button
-          asChild
-          size="lg"
-          className="bg-white text-lg text-zinc-950 hover:bg-zinc-200"
-        >
-          <Link to={user ? "/dashboard" : "/signin"}>Get started</Link>
-        </Button>
       </div>
     </section>
   );
@@ -297,7 +277,6 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       <About />
-      <CallToAction />
       <footer className="border-t border-white/10 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-8 text-sm text-zinc-500">
           <span className="font-semibold text-white">Trello</span>
